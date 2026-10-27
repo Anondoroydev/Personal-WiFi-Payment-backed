@@ -1,15 +1,16 @@
 import dotenv from "dotenv";
 import path from "node:path";
-import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Root of backend/ directory
 const backendRoot = path.resolve(__dirname, "../../");
 
-dotenv.config({ path: path.join(backendRoot, ".env"), override: true });
-dotenv.config({ path: path.resolve(backendRoot, "../.env"), override: true });
-dotenv.config({ override: true });
+if (process.env.VERCEL !== "1") {
+  dotenv.config({ path: path.join(backendRoot, ".env") });
+  dotenv.config({ path: path.resolve(backendRoot, "../.env") });
+  dotenv.config();
+}
 
 function resolveDatabaseUrl(): string {
   const raw = (process.env.DATABASE_URL ?? "").trim();
