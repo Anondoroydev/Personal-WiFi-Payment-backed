@@ -1,9 +1,19 @@
 {
-  "buildCommand": "npm run build:production",
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist",
+        "buildCommand": "npm run build:vercel"
+      }
+    }
+  ],
   "rewrites": [
     {
-      "source": "/",
-      "destination": "/api/status"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
