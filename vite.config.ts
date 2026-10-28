@@ -17,6 +17,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://personal-wi-fi-payment.vercel.app',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
