@@ -374,19 +374,6 @@ export const api = {
     return { success: true as const, payment: toFrontendPayment(payment) };
   },
 
-  async resetMac(username: string) {
-    return request<{
-      username: string;
-      macAddress: string;
-      address: string;
-      bindingCreated: boolean;
-    }>(
-      "/admin/mac-reset",
-      { method: "POST", body: JSON.stringify({ username }) },
-      "admin",
-    );
-  },
-
   async getVouchers(status?: "AVAILABLE" | "USED", packageId?: string) {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
@@ -462,23 +449,6 @@ export const api = {
     return request<{ id: string; name: string; phone: string }>(
       `/admin/users/${encodeURIComponent(id)}`,
       { method: "DELETE" },
-      "admin",
-    );
-  },
-
-  async resetHotspotMac(username: string, disconnectAll = true) {
-    return request<{
-      username: string;
-      macLockCleared: boolean;
-      disconnectedSessions: number;
-      activeSessions: number;
-      message: string;
-    }>(
-      "/admin/mac-reset",
-      {
-        method: "POST",
-        body: JSON.stringify({ username, disconnectAll }),
-      },
       "admin",
     );
   },

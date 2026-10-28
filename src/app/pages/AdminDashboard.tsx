@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, LogOut, CheckCircle, XCircle, Clock, Phone, Hash, Calendar, RefreshCw, User, Wifi, Users, RotateCcw, Trash2, Key, X } from 'lucide-react';
+import { Shield, LogOut, CheckCircle, XCircle, Clock, Phone, Hash, Calendar, RefreshCw, User, Wifi, Users, Trash2, Key, X } from 'lucide-react';
 import { api } from '../services/api';
 import type { AdminUser } from '../services/api';
 import { VoucherManagement } from '../components/VoucherManagement';
@@ -58,11 +58,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'failed'>('all');
-  const [activeSection, setActiveSection] = useState<'payments' | 'vouchers' | 'users' | 'announcements' | 'mac-reset'>('payments');
-  const [macResetUsername, setMacResetUsername] = useState('');
-  const [macResetInput, setMacResetInput] = useState('');
-  const [disconnectAllSessions, setDisconnectAllSessions] = useState(true);
-  const [macResetting, setMacResetting] = useState(false);
+  const [activeSection, setActiveSection] = useState<'payments' | 'vouchers' | 'users' | 'announcements'>('payments');
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showApproveModal, setShowApproveModal] = useState(false);
   
@@ -273,30 +269,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleMacReset = async (username: string, disconnectAll: boolean) => {
-    const sessionScope = disconnectAll ? 'all active sessions' : 'one active session';
-    const confirmed = window.confirm(
-      `Disconnect ${sessionScope} for ${username}? The account and credentials will remain unchanged.`,
-    );
-    if (!confirmed) return;
-
-    setMacResetUsername(username);
-    setMacResetting(true);
-    try {
-      const result = await api.resetHotspotMac(username, disconnectAll);
-      if (result.activeSessions === 0) {
-        toast.success('MAC restriction cleared. No active session was connected. Same voucher can now be used from another device.');
-      } else {
-        toast.success(`MAC restriction cleared; disconnected ${result.disconnectedSessions} active session(s). Reconnect using the same voucher.`);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'MikroTik reset failed');
-    } finally {
-      setMacResetting(false);
-      setMacResetUsername('');
-    }
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminPhone');
@@ -309,7 +281,6 @@ export default function AdminDashboard() {
     { id: 'payments' as const, label: 'Payments' },
     { id: 'vouchers' as const, label: 'Vouchers' },
     { id: 'users' as const, label: 'Users' },
-    { id: 'mac-reset' as const, label: 'MAC Reset' },
     { id: 'announcements' as const, label: 'ঘোষণা (Notice)' },
   ];
 
@@ -552,64 +523,6 @@ export default function AdminDashboard() {
                       {activeSection === 'vouchers' && <VoucherManagement />}
                       {activeSection === 'announcements' && <AnnouncementManagement />}
 
-        {activeSection === 'mac-reset' && (
-          <section className="max-w-2xl rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-            <h2 className="mb-5 flex items-center gap-2 text-lg font-semibold text-slate-900">
-              <RotateCcw className="h-5 w-5 text-amber-700" /> Hotspot MAC Reset
-            </h2>
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                const username = macResetInput.trim();
-                if (username) void handleMacReset(username, disconnectAllSessions);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label htmlFor="hotspot-username" className="mb-1 block text-sm font-medium text-gray-700">
-                  Hotspot username
-                </label>
-                <input
-                  id="hotspot-username"
-                  value={macResetInput}
-                  onChange={(event) => setMacResetInput(event.target.value)}
-                  placeholder="Enter Hotspot username"
-                  autoComplete="off"
-                  required
-                  maxLength={128}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-slate-900 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sessions to disconnect">
-                <button
-                  type="button"
-                  aria-pressed={!disconnectAllSessions}
-                  onClick={() => setDisconnectAllSessions(false)}
-                  className={`rounded-md border px-3 py-2 text-sm font-medium ${!disconnectAllSessions ? 'border-amber-700 bg-amber-700 text-white' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                >
-                  One session
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={disconnectAllSessions}
-                  onClick={() => setDisconnectAllSessions(true)}
-                  className={`rounded-md border px-3 py-2 text-sm font-medium ${disconnectAllSessions ? 'border-amber-700 bg-amber-700 text-white' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                >
-                  All sessions
-                </button>
-                <button
-                  type="submit"
-                  disabled={macResetting || !macResetInput.trim()}
-                  className="inline-flex items-center gap-2 rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto"
-                >
-                  <RotateCcw className={`h-4 w-4 ${macResetting ? 'animate-spin' : ''}`} />
-                  Reset MAC
-                </button>
-              </div>
-            </form>
-          </section>
-        )}
-
         {activeSection === 'users' && (
           <div className="space-y-5">
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -696,23 +609,6 @@ export default function AdminDashboard() {
                               ? <RefreshCw className="h-4 w-4 animate-spin" />
                               : null}
                             Disable user
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMacReset(session.username, false)}
-                            disabled={macResetting || !session.username}
-                            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <RotateCcw className={`h-4 w-4 ${macResetting && macResetUsername === session.username ? 'animate-spin' : ''}`} />
-                            Reset MAC
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMacReset(session.username, true)}
-                            disabled={macResetting || !session.username}
-                            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Reset all
                           </button>
                         </div>
                       </div>
