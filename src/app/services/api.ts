@@ -1,6 +1,8 @@
 import { formatBanglaShortDate } from "../utils/date";
 
-const RAW_API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+const RAW_API_BASE = import.meta.env.PROD
+  ? "/api"
+  : import.meta.env.VITE_API_URL ?? "/api";
 
 function buildUrl(path: string) {
   const base = (RAW_API_BASE || "").replace(/\/$/, "");
