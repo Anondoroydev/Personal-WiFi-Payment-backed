@@ -307,7 +307,7 @@ export function VoucherManagement() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 2xl:gap-6 mb-8">
         <form onSubmit={handleSingleAdd} className="space-y-3 border border-purple-100 bg-purple-50/30 rounded-md p-4">
           <h3 className="font-semibold text-purple-900 flex items-center gap-2">
             <Plus className="w-4 h-4 text-purple-600" /> Single Voucher Add
@@ -348,8 +348,8 @@ export function VoucherManagement() {
         </form>
 
         <form onSubmit={handleBulkUpload} className="space-y-3 border border-indigo-100 bg-indigo-50/30 rounded-md p-4">
-          <div className="flex justify-between items-center mb-1">
-            <h3 className="font-bold text-indigo-900 flex items-center gap-2">
+          <div className="flex flex-col gap-2 mb-1 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="min-w-0 font-bold text-indigo-900 flex items-center gap-2">
               <Upload className="w-4 h-4 text-indigo-600" /> Bulk CSV / PDF Upload
             </h3>
             <div className="relative">
@@ -431,7 +431,7 @@ export function VoucherManagement() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1fr)_auto_auto] sm:items-center">
+        <div className="grid grid-cols-1 gap-2 2xl:grid-cols-[minmax(12rem,1fr)_minmax(12rem,auto)_auto] 2xl:items-center">
           <label className="relative min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -472,7 +472,7 @@ export function VoucherManagement() {
             type="button"
             onClick={handleDeleteAll}
             disabled={loading || vouchers.length === 0}
-            className="flex w-full items-center justify-center gap-1.5 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md text-xs font-bold disabled:opacity-50 transition-colors sm:col-span-2 lg:col-span-1 lg:w-auto"
+            className="flex w-full items-center justify-center gap-1.5 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md text-xs font-bold disabled:opacity-50 transition-colors 2xl:w-auto"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Delete All
@@ -481,7 +481,7 @@ export function VoucherManagement() {
       </div>
 
       {/* Table */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 2xl:hidden">
         {currentItems.map((v) => (
           <article key={v.id} className="min-w-0 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
             <div className="flex min-w-0 items-start justify-between gap-3">
@@ -527,7 +527,7 @@ export function VoucherManagement() {
         ))}
       </div>
 
-      <div className="hidden overflow-x-auto rounded-md border border-gray-200 md:block">
+      <div className="hidden overflow-x-auto rounded-md border border-gray-200 2xl:block">
         <table className="w-full text-sm text-left">
           <thead>
             <tr className="border-b text-gray-700 font-bold bg-gray-100/80 text-xs uppercase tracking-wider">
@@ -606,7 +606,7 @@ export function VoucherManagement() {
           <span className="text-xs font-semibold text-gray-500">
             Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredVouchers.length)} of {filteredVouchers.length} vouchers
           </span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
@@ -615,20 +615,9 @@ export function VoucherManagement() {
             >
               Previous
             </button>
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button
-                key={i + 1}
-                type="button"
-                onClick={() => setCurrentPage(i + 1)}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${
-                  currentPage === i + 1
-                    ? "bg-purple-600 text-white border-purple-600 shadow"
-                    : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            <span className="whitespace-nowrap text-xs font-semibold text-gray-600">
+              Page {currentPage} of {totalPages}
+            </span>
             <button
               type="button"
               onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
