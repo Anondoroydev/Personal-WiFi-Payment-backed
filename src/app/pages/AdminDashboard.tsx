@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, LogOut, CheckCircle, XCircle, Clock, Phone, Hash, Calendar, RefreshCw, User, Wifi, Users, Trash2, Key, X } from 'lucide-react';
 import { api } from '../services/api';
@@ -28,15 +28,6 @@ interface Transaction {
   [key: string]: unknown;
 }
 
-interface ConfiguredHotspotUser {
-  username: string;
-  disabled: boolean;
-  profile: string;
-  macAddress: string;
-  limitUptime: string;
-  comment: string;
-}
-
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -47,14 +38,6 @@ export default function AdminDashboard() {
   const [passwordResetError, setPasswordResetError] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-  const [hotspotUsers, setHotspotUsers] = useState<any[]>([]);
-  const [configuredHotspotUsers, setConfiguredHotspotUsers] = useState<ConfiguredHotspotUser[]>([]);
-  const [hotspotSearch, setHotspotSearch] = useState('');
-  const [expandedHotspotUsername, setExpandedHotspotUsername] = useState<string | null>(null);
-  const [hotspotStatusUpdatingUsername, setHotspotStatusUpdatingUsername] = useState<string | null>(null);
-  const [hotspotFetchedAt, setHotspotFetchedAt] = useState(Date.now());
-  const [countdownNow, setCountdownNow] = useState(Date.now());
-  const hotspotRequestInFlight = useRef(false);
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'failed'>('all');
@@ -153,77 +136,11 @@ export default function AdminDashboard() {
     }
   };
 
-  const loadHotspotUsers = async (showError = true) => {
-    if (hotspotRequestInFlight.current) return;
-
-    hotspotRequestInFlight.current = true;
-    const requestedAt = Date.now();
-    try {
-      const data = await api.getActiveHotspotUsers();
-      setHotspotUsers(data);
-      setHotspotFetchedAt(requestedAt);
-      setCountdownNow(Date.now());
-    } catch (error) {
-      if (showError) {
-        toast.error(error instanceof Error ? error.message : 'Active hotspot user load failed');
-      }
-    } finally {
-      hotspotRequestInFlight.current = false;
-    }
-  };
-
-  const loadConfiguredHotspotUsers = async (showError = true) => {
-    try {
-      const data = await api.getHotspotUsers();
-      setConfiguredHotspotUsers(data);
-    } catch (error) {
-      if (showError) {
-        toast.error(error instanceof Error ? error.message : 'Hotspot user load failed');
-      }
-    }
-  };
-
   useEffect(() => {
     if (activeSection === 'users') {
       loadUsers();
-      loadHotspotUsers();
-      loadConfiguredHotspotUsers();
-      const refreshInterval = setInterval(() => {
-        void loadHotspotUsers(false);
-        void loadConfiguredHotspotUsers(false);
-      }, 10000);
-      const countdownInterval = setInterval(() => {
-        setCountdownNow(Date.now());
-      }, 1000);
-      return () => {
-        clearInterval(refreshInterval);
-        clearInterval(countdownInterval);
-      };
     }
   }, [activeSection]);
-
-  const handleHotspotUserStatus = async (username: string, enabled: boolean) => {
-    const action = enabled ? 'enable' : 'disable';
-    const warning = enabled
-      ? `Enable Hotspot user ${username}? This restores Wi-Fi access for the same credentials.`
-      : `Disable Hotspot user ${username}? This immediately disconnects all active Wi-Fi sessions. The account and credentials will remain on the router.`;
-    if (!window.confirm(warning)) return;
-
-    setHotspotStatusUpdatingUsername(username);
-    try {
-      const result = await api.setHotspotUserEnabled(username, enabled);
-      await Promise.all([loadHotspotUsers(false), loadConfiguredHotspotUsers(false)]);
-      if (enabled) {
-        toast.success(`${username} enabled. Wi-Fi access is restored.`);
-      } else {
-        toast.success(`${username} disabled. Disconnected ${result.disconnectedSessions} active session(s).`);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Unable to ${action} Hotspot user`);
-    } finally {
-      setHotspotStatusUpdatingUsername(null);
-    }
-  };
 
   const loadTransactions = async (showLoading = true) => {
     try {
@@ -288,98 +205,6 @@ export default function AdminDashboard() {
     if (filter === 'all') return true;
     return txn.status === filter;
   });
-
-  const search = hotspotSearch.trim().toLowerCase();
-  const usernameMatches = search
-    ? hotspotUsers.filter((session) => String(session.username ?? '').toLowerCase().includes(search))
-    : [];
-  const filteredHotspotUsers = hotspotUsers.filter((session) => {
-    if (!search) return true;
-    return [session.username, session.address, session.macAddress, session.id]
-      .join(' ')
-      .toLowerCase()
-      .includes(search);
-  });
-  const displayedHotspotUsers = usernameMatches.length > 0
-    ? Array.from(usernameMatches.reduce<Map<string, { session: any; count: number }>>((grouped, session) => {
-      const username = String(session.username ?? '').toLowerCase();
-      const existing = grouped.get(username);
-      if (!existing) {
-        grouped.set(username, { session, count: 1 });
-      } else {
-        const currentSeconds = Number(existing.session.remainingSeconds) || 0;
-        const candidateSeconds = Number(session.remainingSeconds) || 0;
-        grouped.set(username, {
-          session: candidateSeconds < currentSeconds ? session : existing.session,
-          count: existing.count + 1,
-        });
-      }
-      return grouped;
-    }, new Map()).values())
-      .map(({ session, count }) => ({ ...session, activeSessionCount: count }))
-    : filteredHotspotUsers;
-
-  const getLiveRemainingSeconds = (session: any) => Math.max(
-    0,
-    (Number(session.remainingSeconds) || 0) - Math.floor((countdownNow - hotspotFetchedAt) / 1000),
-  );
-
-  const parseRouterOsDurationSeconds = (value: string) => {
-    let totalSeconds = 0;
-    for (const match of value.matchAll(/(\d+)([wdhms])/g)) {
-      const amount = Number(match[1]);
-      switch (match[2]) {
-        case 'w': totalSeconds += amount * 604800; break;
-        case 'd': totalSeconds += amount * 86400; break;
-        case 'h': totalSeconds += amount * 3600; break;
-        case 'm': totalSeconds += amount * 60; break;
-        case 's': totalSeconds += amount; break;
-      }
-    }
-    return totalSeconds;
-  };
-
-  const getLiveElapsedSeconds = (value: string) =>
-    parseRouterOsDurationSeconds(value) + Math.floor((countdownNow - hotspotFetchedAt) / 1000);
-
-  const formatElapsedDuration = (seconds: number) => {
-    const totalSeconds = Math.max(0, Math.floor(seconds));
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-    const parts: string[] = [];
-    if (days > 0) parts.push(`${days}d`);
-    if (hours > 0 || parts.length > 0) parts.push(`${hours}h`);
-    if (minutes > 0 || parts.length > 0) parts.push(`${minutes}m`);
-    parts.push(`${secs}s`);
-    return parts.join(' ');
-  };
-
-  const matchingDisabledHotspotUsers = configuredHotspotUsers.filter((user) => {
-    if (!user.disabled) return false;
-    if (!search) return true;
-    return [user.username, user.profile, user.macAddress, user.comment]
-      .join(' ')
-      .toLowerCase()
-      .includes(search);
-  });
-
-  const formatCountdown = (seconds: number) => {
-    if (!Number.isFinite(seconds) || seconds <= 0) return 'Expired';
-    const totalSeconds = Math.max(0, Math.floor(seconds));
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
-
-    const parts: string[] = [];
-    if (days > 0) parts.push(`${days}d`);
-    if (hours > 0 || parts.length > 0) parts.push(`${hours}h`);
-    if (minutes > 0 || parts.length > 0) parts.push(`${minutes}m`);
-    parts.push(`${secs}s`);
-    return parts.join(' ');
-  };
 
   // Pagination Logic
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -520,207 +345,58 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-                      {activeSection === 'vouchers' && <VoucherManagement />}
-                      {activeSection === 'announcements' && <AnnouncementManagement />}
+        {activeSection === 'vouchers' && <VoucherManagement />}
+        {activeSection === 'announcements' && <AnnouncementManagement />}
 
         {activeSection === 'users' && (
-          <div className="space-y-5">
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
-                  <Wifi className="h-5 w-5 text-emerald-700" /> Live Hotspot Users
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                    {hotspotUsers.length} active
-                  </span>
-                </h2>
-                <input
-                  value={hotspotSearch}
-                  onChange={(event) => setHotspotSearch(event.target.value)}
-                  placeholder="Search username, IP, or MAC"
-                  autoComplete="off"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100 sm:max-w-xs"
-                />
-              </div>
-
-              <div className="grid gap-2.5">
-                {displayedHotspotUsers.length === 0 ? (
-                  <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No active hotspot user found.</p>
-                ) : (
-                  displayedHotspotUsers.map((session) => {
-                    const isUsernameResult = usernameMatches.length > 0;
-                    const remainingSeconds = getLiveRemainingSeconds(session);
-                    return (
-                    <div key={session.username || session.id} className={isUsernameResult ? 'rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 sm:p-6' : 'rounded-lg border border-slate-200 bg-white p-4'}>
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setExpandedHotspotUsername((current) => current === session.username ? null : session.username)}
-                              aria-expanded={expandedHotspotUsername === session.username}
-                              className={`text-left font-semibold text-slate-950 hover:text-emerald-800 ${isUsernameResult ? 'text-2xl sm:text-3xl' : 'text-base'}`}
-                            >
-                              {session.username || 'Unknown user'}
-                            </button>
-                            <span className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                              {session.loginBy || 'Hotspot'}
-                            </span>
-                            {session.activeSessionCount > 1 && (
-                              <span className="text-xs font-medium text-slate-600">{session.activeSessionCount} active sessions</span>
-                            )}
-                          </div>
-                          {isUsernameResult && (
-                            <div className="mt-4 inline-block min-w-56 rounded-md border border-emerald-200 bg-white px-4 py-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Time left</p>
-                              <p className="font-mono text-2xl font-semibold tabular-nums text-emerald-800 sm:text-4xl">
-                                {formatCountdown(remainingSeconds)}
-                              </p>
-                            </div>
-                          )}
-                          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                            <span><strong>User ID:</strong> {session.username || 'N/A'}</span>
-                            <span><strong>IP:</strong> {session.address || 'N/A'}</span>
-                            <span><strong>MAC:</strong> {session.macAddress || 'N/A'}</span>
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                            <span><strong>Uptime:</strong> {formatElapsedDuration(getLiveElapsedSeconds(session.uptime || '0s'))}</span>
-                            {!isUsernameResult && <span><strong>Time Left:</strong> {formatCountdown(remainingSeconds)}</span>}
-                            <span><strong>Idle:</strong> {formatElapsedDuration(getLiveElapsedSeconds(session.idleTime || '0s'))}</span>
-                          </div>
-                          {expandedHotspotUsername === session.username && (
-                            <dl className="mt-4 grid gap-2 border-t border-slate-200 pt-3 text-xs sm:grid-cols-2">
-                              <div><dt className="font-semibold text-slate-500">Login method</dt><dd className="mt-0.5 text-slate-800">{session.loginBy || 'Hotspot'}</dd></div>
-                              <div><dt className="font-semibold text-slate-500">Hotspot server</dt><dd className="mt-0.5 text-slate-800">{session.server || 'N/A'}</dd></div>
-                              <div><dt className="font-semibold text-slate-500">Profile</dt><dd className="mt-0.5 text-slate-800">{configuredHotspotUsers.find((user) => user.username === session.username)?.profile || 'default'}</dd></div>
-                              <div><dt className="font-semibold text-slate-500">Uptime limit</dt><dd className="mt-0.5 text-slate-800">{configuredHotspotUsers.find((user) => user.username === session.username)?.limitUptime || 'Not set'}</dd></div>
-                              <div className="sm:col-span-2"><dt className="font-semibold text-slate-500">Comment</dt><dd className="mt-0.5 break-words text-slate-800">{session.comment || 'None'}</dd></div>
-                            </dl>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
-                          <button
-                            type="button"
-                            onClick={() => void handleHotspotUserStatus(session.username, false)}
-                            disabled={hotspotStatusUpdatingUsername !== null || !session.username}
-                            className="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {hotspotStatusUpdatingUsername === session.username && !configuredHotspotUsers.find((user) => user.username === session.username)?.disabled
-                              ? <RefreshCw className="h-4 w-4 animate-spin" />
-                              : null}
-                            Disable user
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )})
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
-                  <Wifi className="h-5 w-5 text-rose-700" /> Disabled Hotspot Users
-                  <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-800">
-                    {configuredHotspotUsers.filter((user) => user.disabled).length}
-                  </span>
-                </h2>
-              </div>
-              {matchingDisabledHotspotUsers.length === 0 ? (
-                <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                  No disabled Hotspot users.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {matchingDisabledHotspotUsers.map((user) => (
-                    <div key={user.username} className="flex flex-col gap-3 rounded-md border border-rose-200 bg-rose-50/40 p-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedHotspotUsername((current) => current === user.username ? null : user.username)}
-                          aria-expanded={expandedHotspotUsername === user.username}
-                          className="text-left font-semibold text-slate-900 hover:text-rose-800"
-                        >
-                          {user.username}
-                        </button>
-                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                          <span><strong>Profile:</strong> {user.profile || 'default'}</span>
-                          <span><strong>MAC:</strong> {user.macAddress || 'Any'}</span>
-                        </div>
-                        {expandedHotspotUsername === user.username && (
-                          <dl className="mt-3 grid gap-2 border-t border-rose-200 pt-3 text-xs sm:grid-cols-2">
-                            <div><dt className="font-semibold text-slate-500">Uptime limit</dt><dd className="mt-0.5 text-slate-800">{user.limitUptime || 'Not set'}</dd></div>
-                            <div className="sm:col-span-2"><dt className="font-semibold text-slate-500">Comment</dt><dd className="mt-0.5 break-words text-slate-800">{user.comment || 'None'}</dd></div>
-                          </dl>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleHotspotUserStatus(user.username, true)}
-                        disabled={hotspotStatusUpdatingUsername !== null}
-                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-emerald-700 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {hotspotStatusUpdatingUsername === user.username
-                          ? <RefreshCw className="h-4 w-4 animate-spin" />
-                          : null}
-                        Enable user
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
-                <Users className="h-5 w-5 text-slate-600" /> User Management
-              </h2>
-              <div className="space-y-3">
-                {users.map((user) => (
-                  <div key={user.id} className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="font-medium text-slate-900">{user.name}</p>
-                      <p className="text-sm text-slate-500">{user.phone}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Payments: {user._count?.payments ?? 0} | Vouchers: {user._count?.assignedVouchers ?? 0}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPasswordResetUser(user);
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setPasswordResetError('');
-                        }}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-100 px-3 py-2 text-sm font-medium text-purple-700 transition-colors hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      >
-                        <Key className="h-4 w-4" />
-                        পাসওয়ার্ড রিসেট
-                      </button>
-                      {user.role !== 'ADMIN' && (
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteUser(user)}
-                          disabled={deletingUserId !== null}
-                          aria-label={`Delete user ${user.name}`}
-                          title="Delete user and payment history"
-                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {deletingUserId === user.id ? (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </button>
-                      )}
-                    </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
+              <Users className="h-5 w-5 text-slate-600" /> User Management
+            </h2>
+            <div className="space-y-3">
+              {users.map((user) => (
+                <div key={user.id} className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900">{user.name}</p>
+                    <p className="text-sm text-slate-500">{user.phone}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Payments: {user._count?.payments ?? 0} | Vouchers: {user._count?.assignedVouchers ?? 0}
+                    </p>
                   </div>
-                ))}
-                {users.length === 0 && <p className="text-sm text-slate-500">No users found</p>}
-              </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasswordResetUser(user);
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setPasswordResetError('');
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-100 px-3 py-2 text-sm font-medium text-purple-700 transition-colors hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <Key className="h-4 w-4" />
+                      পাসওয়ার্ড রিসেট
+                    </button>
+                    {user.role !== 'ADMIN' && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteUser(user)}
+                        disabled={deletingUserId !== null}
+                        aria-label={`Delete user ${user.name}`}
+                        title="Delete user and payment history"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-rose-200 bg-white text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingUserId === user.id ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {users.length === 0 && <p className="text-sm text-slate-500">No users found</p>}
             </div>
           </div>
         )}

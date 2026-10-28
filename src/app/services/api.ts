@@ -455,44 +455,6 @@ export const api = {
     );
   },
 
-  async getActiveHotspotUsers() {
-    return request<Array<{
-      id: string;
-      username: string;
-      address: string;
-      macAddress: string;
-      uptime: string;
-      sessionTimeLeft: string;
-      remainingSeconds: number;
-      idleTime: string;
-      loginBy: string;
-      server: string;
-      comment: string;
-    }>>("/admin/hotspot/active", {}, "admin");
-  },
-
-  async getHotspotUsers() {
-    return request<Array<{
-      username: string;
-      disabled: boolean;
-      profile: string;
-      macAddress: string;
-      limitUptime: string;
-      comment: string;
-    }>>("/admin/hotspot/users", {}, "admin");
-  },
-
-  async setHotspotUserEnabled(username: string, enabled: boolean) {
-    return request<{ username: string; enabled: boolean; disconnectedSessions: number }>(
-      "/admin/hotspot/users/status",
-      {
-        method: "PATCH",
-        body: JSON.stringify({ username, enabled }),
-      },
-      "admin",
-    );
-  },
-
   async checkUserExists(phoneNumber: string) {
     try {
       const result = await request<{ exists: boolean }>(
